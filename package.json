@@ -1,0 +1,15 @@
+{
+  "name": "password-panic",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A tiny browser game about increasingly unreasonable password rules.",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "start": "node scripts/serve.mjs",
+    "test": "node --test tests/rules.test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

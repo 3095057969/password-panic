@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#080b09" />
+    <title>密码暴走 · PASSWORD PANIC</title>
+    <meta
+      name="description"
+      content="一个关于密码规则的生存游戏。每满足一条要求，系统就再发明一条。共 21 条规则，你能写出最后的 42 个字符吗？"
+    />
+    <meta name="color-scheme" content="dark" />
+    <link rel="canonical" href="https://3095057969.github.io/password-panic/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://3095057969.github.io/password-panic/" />
+    <meta property="og:title" content="密码暴走 · PASSWORD PANIC" />
+    <meta
+      property="og:description"
+      content="每满足一条，规则就多一条。21 条离谱的密码要求，你能活到最后吗？"
+    />
+    <meta property="og:image" content="https://3095057969.github.io/password-panic/assets/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="密码暴走 PASSWORD PANIC 的标题画面，旁边是密码合规监控仪表盘。"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="密码暴走 · PASSWORD PANIC" />
+    <meta
+      name="twitter:description"
+      content="每满足一条，规则就多一条。21 条离谱的密码要求，你能活到最后吗？"
+    />
+    <meta name="twitter:image" content="https://3095057969.github.io/password-panic/assets/og-image.png" />
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+    <link rel="manifest" href="site.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#game">跳到游戏</a>
+    <div class="ambient" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="./" aria-label="密码暴走首页">
+          <span class="brand-glyph" aria-hidden="true">✳</span>
+          <span class="brand-type">
+            <strong>PASSWORD PANIC</strong>
+            <small>密码暴走</small>
+          </span>
+        </a>
+
+        <div class="system-state" aria-hidden="true">
+          <span class="signal-bars"><i></i><i></i><i></i><i></i></span>
+          <span id="system-state-label">SYSTEM: CALIBRATING</span>
+        </div>
+
+        <div class="topbar-meta">
+          <span class="top-stat session-stat">SESSION <strong id="session-time">00:00</strong></span>
+          <span class="top-stat rule-stat">规则 <strong id="header-rule-count">01</strong><span>/21</span></span>
+          <button id="sound-toggle" class="sound-toggle" type="button" aria-pressed="true">
+            <span class="sound-icon" aria-hidden="true">◖))</span>
+            <span id="sound-label">声音 开</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero wrap" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="eyebrow-line"></span> 一个关于密码规则的生存游戏</p>
+          <h1 id="hero-title">
+            <span class="hero-kicker" aria-hidden="true">COMPLIANCE SIMULATOR / 2026</span>
+            <span class="hero-word">PASSWORD</span>
+            <span class="hero-cn">密码<span class="hero-cn-accent">暴走</span><span class="hero-cursor" aria-hidden="true">_</span></span>
+          </h1>
+          <div class="hero-bottom">
+            <p class="hero-sub">
+              每满足一条要求，系统就再发明一条。<br />
+              从 8 个字符开始，以 42 个字符结束。祝你好运。
+            </p>
+            <a class="start-link" href="#game" id="start-link">
+              <span>开始受审</span>
+              <span class="start-arrow" aria-hidden="true">↓</span>
+            </a>
+          </div>
+          <p class="hero-credit">
+            独立制作 · 受那些越来越离谱的密码要求启发 · 与 neal.fun 无关联
+          </p>
+        </div>
+
+        <div class="case-stage" aria-label="密码合规监控面板">
+          <span class="float-tag float-tag-a" aria-hidden="true">NO. 042</span>
+          <span class="float-tag float-tag-b" aria-hidden="true">DO NOT REUSE</span>
+          <div class="case-card">
+            <div class="case-topline">
+              <span>CASE FILE / 042</span>
+              <span class="live-tag"><i></i> LIVE</span>
+            </div>
+            <div class="case-body">
+              <div class="threat-ring" id="hero-gauge" style="--progress: 0deg">
+                <div class="threat-ring-inner">
+                  <span class="gauge-number" id="gauge-value">000</span>
+                  <span class="gauge-unit">% COMPLIANT</span>
+                </div>
+              </div>
+              <div class="case-readout">
+                <span class="readout-label">THREAT LEVEL</span>
+                <strong id="threat-level">稳定</strong>
+                <span class="readout-line"></span>
+                <span class="readout-meta">RULES <b id="hero-rules">01</b> / 21</span>
+                <span class="readout-meta">REVIEW <b id="hero-review">0%</b></span>
+              </div>
+            </div>
+            <div class="case-ticker" aria-hidden="true">
+              <span>UPPERCASE</span><span>EMOJI</span><span>CAPTCHA</span><span>CHESS</span><span>42</span>
+            </div>
+            <div class="case-stamp" aria-hidden="true">REVIEW<br />PENDING</div>
+            <div class="case-barcode" aria-hidden="true"></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="rule-tape" aria-hidden="true">
+        <div class="rule-tape-track">
+          <span>8+ CHARACTERS</span><i>✳</i><span>UPPERCASE + LOWERCASE + NUMBER</span><i>✳</i><span>DIGIT SUM 42</span><i>✳</i><span>NO LOWERCASE E</span><i>✳</i><span>CAPTCHA REQUIRED</span><i>✳</i><span>EXACTLY 42</span><i>✳</i>
+          <span>8+ CHARACTERS</span><i>✳</i><span>UPPERCASE + LOWERCASE + NUMBER</span><i>✳</i><span>DIGIT SUM 42</span><i>✳</i><span>NO LOWERCASE E</span><i>✳</i><span>CAPTCHA REQUIRED</span><i>✳</i><span>EXACTLY 42</span><i>✳</i>
+        </div>
+      </div>
+
+      <section id="game" class="game wrap" aria-labelledby="game-title">
+        <div class="game-heading">
+          <div>
+            <p class="section-kicker"><span>02</span> LIVE COMPLIANCE</p>
+            <h2 id="game-title">现在，创建一个密码。</h2>
+          </div>
+          <p class="game-note">
+            满足当前规则后，下一条才会出现。<br />
+            <strong>共 21 条。</strong>没有捷径，只有越来越奇怪的规则。
+          </p>
+        </div>
+
+        <div class="game-grid">
+          <div class="key-column">
+            <section class="key-panel panel" aria-labelledby="key-title">
+              <div class="panel-topline">
+                <h3 id="key-title"><span class="status-dot"></span> MASTER KEY</h3>
+                <span id="input-state" class="input-state">等待输入</span>
+              </div>
+
+              <div class="password-box">
+                <span class="password-prompt" aria-hidden="true">❯</span>
+                <label class="sr-only" for="password">主密码</label>
+                <textarea
+                  id="password"
+                  class="password-input"
+                  rows="4"
+                  maxlength="140"
+                  spellcheck="false"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  autocorrect="off"
+                  placeholder="从 8 个字符开始…"
+                  aria-describedby="password-note"
+                ></textarea>
+                <span class="password-scan" aria-hidden="true"></span>
+              </div>
+
+              <div class="password-meta">
+                <span><b id="char-count">0</b> 字符</span>
+                <span>数字和 <b id="digit-sum">0</b></span>
+                <span class="meta-live"><i aria-hidden="true"></i> 实时审查</span>
+              </div>
+
+              <div class="progress-wrap">
+                <div
+                  id="progress-segments"
+                  class="progress-segments"
+                  role="progressbar"
+                  aria-label="已解决的规则"
+                  aria-valuemin="0"
+                  aria-valuemax="21"
+                  aria-valuenow="0"
+                ></div>
+                <div class="progress-caption">
+                  <span id="resolved-label">0 / 21 条已解决</span>
+                  <span id="pressure-label">系统压力 05%</span>
+                </div>
+              </div>
+
+              <div class="key-actions">
+                <button class="btn btn-primary" id="hint-btn" type="button">
+                  <span class="btn-glyph" aria-hidden="true">?</span> 提示
+                </button>
+                <button class="btn" id="copy-btn" type="button">
+                  <span class="btn-glyph" aria-hidden="true">⧉</span> 复制
+                </button>
+                <button class="btn btn-ghost" id="reset-btn" type="button">
+                  <span class="btn-glyph" aria-hidden="true">↺</span> 重开
+                </button>
+              </div>
+
+              <div class="current-objective">
+                <span class="objective-label">当前目标 / NOW</span>
+                <strong id="current-objective">第 01 条 · 八字符起步</strong>
+                <p id="current-hint" class="current-hint" hidden></p>
+              </div>
+
+              <p class="notice" id="notice" aria-live="polite">输入第一个字符，开始审查。</p>
+              <p class="password-disclaimer" id="password-note">
+                密码会一直显示在屏幕上——这里没有隐私，只有规则。请勿把这个密码用在任何真实网站。
+              </p>
+            </section>
+
+            <aside class="side-console" aria-label="系统状态">
+              <div class="console-line">
+                <span class="console-key">AUDIT</span>
+                <span id="console-audit">AWAITING INPUT</span>
+              </div>
+              <div class="console-line">
+                <span class="console-key">HINT</span>
+                <span id="console-hint">NONE REQUESTED</span>
+              </div>
+              <div class="console-line console-line-last">
+                <span class="console-key">STATUS</span>
+                <span id="console-status">ALL SYSTEMS NOMINAL*</span>
+              </div>
+              <p class="console-footnote">* 系统从未正常过。</p>
+            </aside>
+          </div>
+
+          <aside class="rules-panel" aria-labelledby="rules-title">
+            <div class="rules-topline">
+              <div>
+                <p class="section-kicker"><span>03</span> COMPLIANCE QUEUE</p>
+                <h2 id="rules-title">合规清单</h2>
+              </div>
+              <div class="score-badge">
+                <strong id="score-num">00</strong>
+                <span>/ 21<br />通过</span>
+              </div>
+            </div>
+
+            <div id="rules-list" class="rules-list" aria-label="已解锁的规则" tabindex="0"></div>
+
+            <div id="locked-teaser" class="locked-teaser">
+              <span class="locked-mark" aria-hidden="true">?</span>
+              <div>
+                <strong>还有 <span id="teaser-count">20</span> 条规则在门外</strong>
+                <p>满足当前规则，它们才会排队进来。</p>
+              </div>
+            </div>
+
+            <p class="rules-footnote">
+              规则按顺序揭露。旧规则可能被新修正案废止。<br />
+              现实中的密码系统不会这么诚实。
+            </p>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer wrap">
+      <div class="footer-brand">
+        <span aria-hidden="true">✳</span>
+        <strong>PASSWORD PANIC</strong>
+        <span>/ 密码暴走</span>
+      </div>
+      <p>一个关于密码规则的黑色小玩笑。灵感属于互联网，代码和文案属于这里。</p>
+      <p class="footer-right">NO REAL PASSWORDS WERE HARMED · 2026</p>
+    </footer>
+
+    <div id="victory" class="victory" hidden>
+      <div class="confetti" id="confetti" aria-hidden="true"></div>
+      <div class="victory-card" role="dialog" aria-modal="true" aria-labelledby="victory-title">
+        <div class="victory-topline">
+          <span>FINAL AUDIT / COMPLETE</span>
+          <span class="victory-live"><i></i> ACCESS GRANTED</span>
+        </div>
+        <div class="victory-content">
+          <p class="victory-kicker">21 / 21 条规则通过</p>
+          <h2 id="victory-title">你自由了<span aria-hidden="true">。</span></h2>
+          <p class="victory-sub">密码已获批准。系统无话可说，只能放行。</p>
+
+          <div class="victory-stats">
+            <div><span>规则</span><strong>21</strong></div>
+            <div><span>字符</span><strong id="victory-chars">42</strong></div>
+            <div><span>用时</span><strong id="victory-time">00:00</strong></div>
+          </div>
+
+          <div class="victory-password-wrap">
+            <span>FINAL MASTER KEY</span>
+            <code id="victory-password"></code>
+          </div>
+
+          <div class="victory-actions">
+            <button class="btn btn-primary btn-large" id="share-btn" type="button">复制战报</button>
+            <button class="btn btn-large" id="replay-btn" type="button">再受一次审</button>
+          </div>
+          <p class="victory-footnote">别真的把这个密码拿去用。尤其是第 21 条。</p>
+        </div>
+        <div class="victory-barcode" aria-hidden="true"></div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="js/game.js"></script>
+  </body>
+</html>
