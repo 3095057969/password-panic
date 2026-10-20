@@ -5,7 +5,7 @@
 
 @font-face {
   font-family: "Archivo Black";
-  src: url("assets/fonts/archivo-black-400.woff2") format("woff2");
+  src: url("../fonts/archivo-black-400.woff2") format("woff2");
   font-style: normal;
   font-weight: 400;
   font-display: swap;
@@ -13,7 +13,7 @@
 
 @font-face {
   font-family: "Space Mono";
-  src: url("assets/fonts/space-mono-400.woff2") format("woff2");
+  src: url("../fonts/space-mono-400.woff2") format("woff2");
   font-style: normal;
   font-weight: 400;
   font-display: swap;
@@ -21,7 +21,7 @@
 
 @font-face {
   font-family: "Space Mono";
-  src: url("assets/fonts/space-mono-700.woff2") format("woff2");
+  src: url("../fonts/space-mono-700.woff2") format("woff2");
   font-style: normal;
   font-weight: 700;
   font-display: swap;
@@ -60,6 +60,7 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: clip;
   background: var(--bg);
 }
 
@@ -1099,6 +1100,40 @@ h1 {
   animation: pulse 1.8s infinite;
 }
 
+.storage-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 8px;
+}
+
+.storage-status {
+  flex: 1 1 220px;
+  min-width: 0;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.storage-status[data-tone="good"] {
+  color: var(--mint);
+}
+
+.storage-status[data-tone="alert"] {
+  color: #ff9a88;
+}
+
+.storage-action {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 6px 10px;
+  font-size: 8px;
+}
+
 .progress-wrap {
   margin-top: 16px;
   padding-top: 13px;
@@ -1234,6 +1269,14 @@ h1 {
   opacity: 0.4;
   cursor: not-allowed;
   transform: none;
+}
+
+.victory-reopen {
+  width: 100%;
+  margin-top: 10px;
+  border-color: rgba(216, 255, 79, 0.38);
+  background: var(--acid-soft);
+  color: var(--acid);
 }
 
 .current-objective {
@@ -2900,8 +2943,18 @@ h1 {
   }
 
   .password-meta {
+    flex-wrap: wrap;
     gap: 13px;
     font-size: 7.5px;
+  }
+
+  .storage-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .storage-action {
+    width: 100%;
   }
 
   .progress-caption {

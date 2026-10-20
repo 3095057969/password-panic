@@ -12,9 +12,16 @@ import {
   makeContext,
   resolveRule,
 } from "./rules.js";
+import {
+  MAX_PASSWORD_POINTS,
+  createInitialState,
+  normalizePassword,
+  parseStoredState,
+} from "./state.js";
 
 const STORAGE_KEY = "password-panic-state-v1";
 const SOUND_KEY = "password-panic-sound";
+const CORRUPT_BACKUP_KEY = "password-panic-state-corrupt-backup";
 const CAPTCHA_ALPHABET = "23456789ACDEFGHJKMNPQRTUVWXY";
 const CAPTCHA_LENGTH = 5;
 const PRESSURE_CLICKS = 10;
@@ -24,7 +31,12 @@ const KNIGHT_RANKS = [5, 4, 3, 2, 1];
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-let state = loadState();
+const loadResult = loadState();
+let state = loadResult.state;
+let loadKind = loadResult.kind;
+let storageWritable = !loadResult.storageUnavailable && loadKind !== "incompatible";
+let storageFailureShown = false;
+let storageStatusTimer = null;
 let soundOn = loadSoundPreference();
 let audioContext = null;
 let renderedCount = 0;
@@ -39,6 +51,9 @@ let saveTimer = null;
 let toastTimer = null;
 let victoryShown = false;
 let clockTimer = null;
+let sessionGeneration = 0;
+let passwordComposing = false;
+let victoryReturnFocus = null;
 
 const els = {};
 
@@ -46,21 +61,32 @@ document.addEventListener("DOMContentLoaded", init);
 
 function init() {
   cacheElements();
+  els.charLimit.textContent = String(MAX_PASSWORD_POINTS);
   buildProgressSegments();
   bindEvents();
   syncSoundButton();
   els.password.value = state.password;
   syncUI({ initial: true });
   startClock();
+  syncLoadStatus();
+
+  if (loadKind === "migrated" || loadKind === "corrupt") scheduleSave();
+  if (loadKind === "incompatible") showIncompatibleState();
 
   if (state.victory) {
-    window.setTimeout(() => showVictory({ silent: true }), 240);
+    const generation = sessionGeneration;
+    window.setTimeout(() => {
+      if (generation === sessionGeneration && state.victory) {
+        showVictory({ silent: true, expectedGeneration: generation });
+      }
+    }, 240);
   }
 }
 
 function cacheElements() {
   els.password = document.querySelector("#password");
   els.charCount = document.querySelector("#char-count");
+  els.charLimit = document.querySelector("#char-limit");
   els.digitSum = document.querySelector("#digit-sum");
   els.progressSegments = document.querySelector("#progress-segments");
   els.resolvedLabel = document.querySelector("#resolved-label");
@@ -80,6 +106,9 @@ function cacheElements() {
   els.currentObjective = document.querySelector("#current-objective");
   els.currentHint = document.querySelector("#current-hint");
   els.notice = document.querySelector("#notice");
+  els.storageStatus = document.querySelector("#storage-status");
+  els.startFreshBtn = document.querySelector("#start-fresh-btn");
+  els.showVictoryBtn = document.querySelector("#show-victory-btn");
   els.inputState = document.querySelector("#input-state");
   els.consoleAudit = document.querySelector("#console-audit");
   els.consoleHint = document.querySelector("#console-hint");
@@ -112,8 +141,15 @@ function buildProgressSegments() {
 
 function bindEvents() {
   els.password.addEventListener("input", handlePasswordInput);
+  els.password.addEventListener("compositionstart", () => {
+    passwordComposing = true;
+  });
+  els.password.addEventListener("compositionend", () => {
+    passwordComposing = false;
+    handlePasswordInput();
+  });
   els.password.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
+    if (event.key === "Enter" && !event.isComposing && event.keyCode !== 229) {
       event.preventDefault();
       els.password.blur();
     }
@@ -125,6 +161,10 @@ function bindEvents() {
   els.soundToggle.addEventListener("click", toggleSound);
   els.shareBtn.addEventListener("click", shareReport);
   els.replayBtn.addEventListener("click", () => newGame({ focus: true }));
+  els.showVictoryBtn.addEventListener("click", () => showVictory({ silent: true }));
+  els.startFreshBtn.addEventListener("click", () => {
+    newGame({ focus: true, allowOverwrite: true });
+  });
 
   els.startLink.addEventListener("click", (event) => {
     event.preventDefault();
@@ -133,7 +173,10 @@ function bindEvents() {
       block: "start",
     });
     if (window.matchMedia("(min-width: 901px)").matches) {
-      window.setTimeout(() => els.password.focus({ preventScroll: true }), 520);
+      const generation = sessionGeneration;
+      window.setTimeout(() => {
+        if (generation === sessionGeneration) els.password.focus({ preventScroll: true });
+      }, 520);
     }
   });
 
@@ -163,70 +206,116 @@ function createCaptcha() {
   return code;
 }
 
+function createSessionId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
 function initialState() {
-  return {
-    password: "",
-    activeCount: 1,
+  return createInitialState({
     captchaCode: createCaptcha(),
-    captchaSolved: false,
-    pressureSolved: false,
-    knightSolved: false,
-    startAt: null,
-    finishMs: null,
-    victory: false,
-    savedAt: null,
-  };
+    sessionId: createSessionId(),
+  });
 }
 
 function loadState() {
   const fresh = initialState();
+
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return fresh;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return fresh;
+    const result = parseStoredState(raw, {
+      captchaCode: fresh.captchaCode,
+      sessionId: fresh.sessionId,
+    });
 
-    const activeCount = Number.isInteger(parsed.activeCount)
-      ? Math.min(TOTAL_RULES, Math.max(1, parsed.activeCount))
-      : 1;
-    const password = typeof parsed.password === "string" ? parsed.password.replace(/[\r\n]/g, "").slice(0, 140) : "";
-    const captchaCode =
-      typeof parsed.captchaCode === "string" && /^[A-Z0-9]{5}$/.test(parsed.captchaCode)
-        ? parsed.captchaCode
-        : fresh.captchaCode;
-    const startAt = Number.isFinite(parsed.startAt) ? parsed.startAt : password ? Date.now() : null;
+    if (result.kind === "corrupt") {
+      try {
+        window.localStorage.setItem(CORRUPT_BACKUP_KEY, result.raw);
+      } catch {
+        // The backup is diagnostic only; the game must still open.
+      }
+    }
 
-    return {
-      ...fresh,
-      password,
-      activeCount,
-      captchaCode,
-      captchaSolved: Boolean(parsed.captchaSolved),
-      pressureSolved: Boolean(parsed.pressureSolved),
-      knightSolved: Boolean(parsed.knightSolved),
-      startAt,
-      finishMs: Number.isFinite(parsed.finishMs) ? parsed.finishMs : null,
-      victory: Boolean(parsed.victory),
-      savedAt: Number.isFinite(parsed.savedAt) ? parsed.savedAt : null,
-    };
+    if (result.kind === "incompatible") {
+      return { ...result, state: fresh };
+    }
+
+    return result;
   } catch {
-    return fresh;
+    return { kind: "fresh", state: fresh, storageUnavailable: true };
   }
 }
 
 function saveState() {
   window.clearTimeout(saveTimer);
+  saveTimer = null;
+
+  if (!storageWritable) return false;
+
   try {
     state.savedAt = Date.now();
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    reportStorageSuccess();
+    return true;
   } catch {
-    /* A private window with no storage is still allowed to play. */
+    reportStorageFailure();
+    return false;
   }
 }
 
 function scheduleSave() {
   window.clearTimeout(saveTimer);
   saveTimer = window.setTimeout(saveState, 120);
+}
+
+function setStorageStatus(message, tone = "", persist = false) {
+  if (!els.storageStatus) return;
+  window.clearTimeout(storageStatusTimer);
+  storageStatusTimer = null;
+  els.storageStatus.textContent = message;
+  els.storageStatus.dataset.tone = tone;
+  els.storageStatus.hidden = false;
+
+  if (!persist) {
+    storageStatusTimer = window.setTimeout(() => {
+      els.storageStatus.hidden = true;
+    }, 2200);
+  }
+}
+
+function reportStorageFailure() {
+  storageFailureShown = true;
+  setStorageStatus("本次进度无法保存，刷新会丢失。", "alert", true);
+}
+
+function reportStorageSuccess() {
+  if (!storageFailureShown) return;
+  storageFailureShown = false;
+  setStorageStatus("存档已恢复，最新进度已保存。", "good");
+}
+
+function syncLoadStatus() {
+  if (!els.storageStatus) return;
+
+  if (loadResult.storageUnavailable) {
+    reportStorageFailure();
+  } else if (loadKind === "corrupt") {
+    setStorageStatus("检测到损坏存档，原值已备份，并已开始新局。", "alert", true);
+  } else if (loadKind === "migrated") {
+    setStorageStatus("旧版存档已升级，正在保存当前版本。", "good");
+  } else if (loadKind === "restored") {
+    setStorageStatus("已恢复上次进度。", "good", false);
+  }
+}
+
+function showIncompatibleState() {
+  if (!els.storageStatus || !els.startFreshBtn) return;
+  setStorageStatus(
+    "检测到更高版本的存档。为避免覆盖，当前页面不会自动保存；请使用当前版本开始新局。",
+    "alert",
+    true,
+  );
+  els.startFreshBtn.hidden = false;
 }
 
 function loadSoundPreference() {
@@ -305,12 +394,12 @@ function syncUI({ initial = false } = {}) {
     if (state.activeCount > previousActive) {
       const newRule = RULES[state.activeCount - 1];
       setNotice(`新规则已加载：第 ${newRule.code} 条《${newRule.title}》。`, "alert");
-    } else if (newlyResolved.length > 0) {
-      const latest = newlyResolved[newlyResolved.length - 1].rule;
-      setNotice(`第 ${latest.code} 条《${latest.title}》已通过。`, "good");
     } else if (regressed.length > 0) {
       const latest = regressed[regressed.length - 1].rule;
       setNotice(`第 ${latest.code} 条失效。需要回头修改密码。`, "alert");
+    } else if (newlyResolved.length > 0) {
+      const latest = newlyResolved[newlyResolved.length - 1].rule;
+      setNotice(`第 ${latest.code} 条《${latest.title}》已通过。`, "good");
     }
   }
 
@@ -339,7 +428,12 @@ function syncUI({ initial = false } = {}) {
     lockGameForVictory();
     saveState();
     if (!victoryShown && !initial) {
-      window.setTimeout(() => showVictory(), 420);
+      const generation = sessionGeneration;
+      window.setTimeout(() => {
+        if (generation === sessionGeneration && state.victory) {
+          showVictory({ expectedGeneration: generation });
+        }
+      }, 420);
     }
   } else {
     els.password.disabled = false;
@@ -358,7 +452,10 @@ function renderNewCards({ initial, animate }) {
     const card = createRuleCard(rule, renderedCount);
     if (!initial && animate) {
       card.classList.add("is-new");
-      window.setTimeout(() => card.classList.remove("is-new"), 700);
+      const generation = sessionGeneration;
+      window.setTimeout(() => {
+        if (generation === sessionGeneration && card.isConnected) card.classList.remove("is-new");
+      }, 700);
     }
     els.rulesList.append(card);
     renderedCount += 1;
@@ -478,7 +575,7 @@ function createCaptchaChallenge(rule, solved) {
       <button class="challenge-btn" type="button" data-action="captcha-submit">验证</button>
       <button class="challenge-btn challenge-btn-quiet" type="button" data-action="captcha-refresh" aria-label="换一个验证码" title="换一个验证码">↻</button>
     </div>
-    <p class="challenge-message" id="${messageId}" data-captcha-message aria-live="polite">区分大小写。这只是走个流程。</p>
+    <p class="challenge-message" id="${messageId}" data-captcha-message aria-live="polite">不区分大小写。这只是走个流程。</p>
   `;
 
   const display = wrap.querySelector("[data-captcha-display]");
@@ -865,7 +962,9 @@ function updateCurrentHint({ current, previousCurrentId }) {
 }
 
 function scrollToNewestCard({ initial }) {
+  const generation = sessionGeneration;
   window.setTimeout(() => {
+    if (generation !== sessionGeneration) return;
     const newest = els.rulesList.lastElementChild;
     if (!newest) return;
     scrollToCardElement(newest, initial);
@@ -873,7 +972,9 @@ function scrollToNewestCard({ initial }) {
 }
 
 function scrollToRuleCard(ruleId, { initial = false } = {}) {
+  const generation = sessionGeneration;
   window.setTimeout(() => {
+    if (generation !== sessionGeneration) return;
     const card = els.rulesList.querySelector(`[data-rule-id="${ruleId}"]`);
     if (!card) return;
     scrollToCardElement(card, initial);
@@ -902,12 +1003,15 @@ function setNotice(message, tone = "") {
 /* ============================== Interactions ============================== */
 
 function handlePasswordInput() {
+  if (passwordComposing) return;
+
   const raw = els.password.value;
-  const clean = raw.replace(/[\r\n]/g, "");
+  const clean = normalizePassword(raw);
   if (raw !== clean) {
-    const selection = els.password.selectionStart ?? clean.length;
+    const selection = els.password.selectionStart ?? raw.length;
+    const cleanPrefix = normalizePassword(raw.slice(0, selection));
     els.password.value = clean;
-    const next = Math.max(0, selection - (raw.length - clean.length));
+    const next = Math.min(cleanPrefix.length, clean.length);
     els.password.setSelectionRange(next, next);
   }
 
@@ -950,7 +1054,7 @@ function handleRuleListClick(event) {
 
 function handleRuleListKeydown(event) {
   const input = event.target.closest("[data-captcha-input]");
-  if (input && event.key === "Enter") {
+  if (input && event.key === "Enter" && !event.isComposing && event.keyCode !== 229) {
     event.preventDefault();
     submitCaptcha(input.closest(".captcha-challenge"));
   }
@@ -973,23 +1077,31 @@ function submitCaptcha(challenge) {
     state.captchaSolved = true;
     setCaptchaMessage(message, "验证通过。正在记录你的存在。", "success");
     syncUI();
-    window.setTimeout(() => els.password.focus({ preventScroll: true }), 100);
+    const generation = sessionGeneration;
+    window.setTimeout(() => {
+      if (generation === sessionGeneration) els.password.focus({ preventScroll: true });
+    }, 100);
   } else {
-    setCaptchaMessage(message, "验证码不匹配。再看一眼，大小写也要一致。", "error");
+    setCaptchaMessage(message, "验证码不匹配。大小写不影响结果，请再检查字符。", "error");
     playSound("error");
     challenge.classList.remove("is-solved");
     input.setAttribute("aria-invalid", "true");
     input.select();
-    challenge.animate(
-      [
-        { transform: "translateX(0)" },
-        { transform: "translateX(-4px)" },
-        { transform: "translateX(4px)" },
-        { transform: "translateX(0)" },
-      ],
-      { duration: 220, easing: "ease" },
-    );
-    window.setTimeout(() => input.removeAttribute("aria-invalid"), 900);
+    if (!reduceMotion.matches) {
+      challenge.animate(
+        [
+          { transform: "translateX(0)" },
+          { transform: "translateX(-4px)" },
+          { transform: "translateX(4px)" },
+          { transform: "translateX(0)" },
+        ],
+        { duration: 220, easing: "ease" },
+      );
+    }
+    const generation = sessionGeneration;
+    window.setTimeout(() => {
+      if (generation === sessionGeneration && input.isConnected) input.removeAttribute("aria-invalid");
+    }, 900);
   }
 }
 
@@ -1044,12 +1156,14 @@ function handlePressureClick(challenge) {
   }
 
   if (message) message.textContent = "别停。再快一点。";
+  const generation = sessionGeneration;
   pressureTimer = window.setTimeout(() => {
-    resetPressureCombo(challenge);
+    if (generation === sessionGeneration) resetPressureCombo(challenge, generation);
   }, PRESSURE_TIMEOUT);
 }
 
-function resetPressureCombo(challenge) {
+function resetPressureCombo(challenge, expectedGeneration = sessionGeneration) {
+  if (expectedGeneration !== sessionGeneration) return;
   pressureClicks = 0;
   pressureTimer = null;
   if (!document.body.contains(challenge)) return;
@@ -1087,7 +1201,10 @@ function handleKnightSquare(squareButton) {
 
   squareButton.classList.add("is-wrong");
   playSound("error");
-  window.setTimeout(() => squareButton.classList.remove("is-wrong"), 360);
+  const generation = sessionGeneration;
+  window.setTimeout(() => {
+    if (generation === sessionGeneration && squareButton.isConnected) squareButton.classList.remove("is-wrong");
+  }, 360);
   const message = squareButton.closest(".knight-challenge")?.querySelector(".challenge-message");
   if (message) {
     message.textContent = square === "a2" ? "那是骑士的起点。马走「日」。" : "这里没有甲虫。马走「日」。";
@@ -1100,7 +1217,9 @@ function copyPassword() {
     showToast("密码还是空的。先写点什么，哪怕只是 abc。", "alert");
     return;
   }
+  const generation = sessionGeneration;
   copyText(state.password).then((ok) => {
+    if (generation !== sessionGeneration) return;
     showToast(ok ? "密码已复制。请不要拿它去注册任何网站。" : "复制失败。手动选中密码吧。", ok ? "" : "alert");
   });
 }
@@ -1113,7 +1232,9 @@ function shareReport() {
     `我在《密码暴走》里用 ${chars} 个字符通过了 ${TOTAL_RULES} 条规则，用时 ${seconds}。\n` +
     `${window.location.origin}${window.location.pathname}\n` +
     "你能活到第几条？";
+  const generation = sessionGeneration;
   copyText(report).then((ok) => {
+    if (generation !== sessionGeneration) return;
     showToast(ok ? "战报已复制。去吓吓你的朋友。" : "复制失败。请手动复制页面地址。", ok ? "" : "alert");
   });
 }
@@ -1146,6 +1267,11 @@ async function copyText(text) {
 }
 
 function handleResetClick() {
+  if (loadKind === "incompatible") {
+    showToast("检测到更高版本存档。请使用上方“开始新局”明确覆盖。", "alert");
+    return;
+  }
+
   if (resetArmed) {
     newGame({ focus: true });
     return;
@@ -1184,24 +1310,38 @@ function hasProgress() {
   );
 }
 
-function newGame({ focus = false } = {}) {
+function newGame({ focus = false, allowOverwrite = false } = {}) {
+  if (loadKind === "incompatible" && !allowOverwrite) return;
+
+  sessionGeneration += 1;
   window.clearTimeout(pressureTimer);
   window.clearTimeout(saveTimer);
   window.clearTimeout(resetTimer);
+  window.clearTimeout(toastTimer);
+  window.clearTimeout(storageStatusTimer);
   pressureTimer = null;
   saveTimer = null;
   resetTimer = null;
+  toastTimer = null;
+  storageStatusTimer = null;
   pressureClicks = 0;
+  passwordComposing = false;
   disarmReset();
-  hideVictory();
+  hideVictory({ restoreFocus: false, revealResult: false });
   hideToast();
+
+  if (allowOverwrite && loadKind === "incompatible") {
+    storageWritable = true;
+    storageFailureShown = false;
+  }
 
   try {
     window.localStorage.removeItem(STORAGE_KEY);
   } catch {
-    /* no-op */
+    // The next save attempt will surface a persistent failure message.
   }
 
+  loadKind = "fresh";
   state = initialState();
   hintOpen = false;
   lastResolvedIds = new Set();
@@ -1214,6 +1354,9 @@ function newGame({ focus = false } = {}) {
   els.hintBtn.disabled = false;
   els.hintBtn.setAttribute("aria-pressed", "false");
   els.lockedTeaser.hidden = false;
+  els.storageStatus.hidden = true;
+  els.startFreshBtn.hidden = true;
+  els.showVictoryBtn.hidden = true;
   updateClock();
   syncUI({ initial: true });
   saveState();
@@ -1300,27 +1443,42 @@ function lockGameForVictory() {
   els.lockedTeaser.hidden = true;
 }
 
-function showVictory({ silent = false } = {}) {
-  if (victoryShown) return;
+function showVictory({ silent = false, expectedGeneration = sessionGeneration } = {}) {
+  if (expectedGeneration !== sessionGeneration || !state.victory || victoryShown) return;
   victoryShown = true;
+  victoryReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   els.victoryChars.textContent = String(charsOf(state.password).length);
   els.victoryTime.textContent = formatDuration(state.finishMs ?? 0);
   els.victoryPassword.textContent = state.password;
+  els.showVictoryBtn.hidden = true;
   buildConfetti();
   els.victory.hidden = false;
   document.body.style.overflow = "hidden";
+  els.shareBtn.focus({ preventScroll: true });
   if (!silent) playSound("win");
+  const generation = sessionGeneration;
   window.setTimeout(() => {
-    els.shareBtn.focus({ preventScroll: true });
+    if (generation === sessionGeneration && !els.victory.hidden) {
+      els.shareBtn.focus({ preventScroll: true });
+    }
   }, 80);
 }
 
-function hideVictory() {
+function hideVictory({ restoreFocus = false, revealResult = false } = {}) {
   if (!els.victory) return;
   els.victory.hidden = true;
   els.confetti.replaceChildren();
   document.body.style.overflow = "";
   victoryShown = false;
+
+  const keepResultButton = revealResult && state.victory;
+  els.showVictoryBtn.hidden = !keepResultButton;
+  if (restoreFocus && keepResultButton) {
+    els.showVictoryBtn.focus({ preventScroll: true });
+  } else if (restoreFocus && victoryReturnFocus?.isConnected) {
+    victoryReturnFocus.focus({ preventScroll: true });
+  }
+  victoryReturnFocus = null;
 }
 
 function buildConfetti() {
@@ -1344,6 +1502,11 @@ function buildConfetti() {
 }
 
 function handleDocumentKeydown(event) {
+  if (event.key === "Escape" && !els.victory.hidden) {
+    event.preventDefault();
+    hideVictory({ restoreFocus: true, revealResult: true });
+    return;
+  }
   if (event.key === "Escape" && resetArmed) {
     disarmReset();
     return;
@@ -1404,7 +1567,10 @@ function showToast(message, tone = "") {
   els.toast.textContent = message;
   els.toast.classList.toggle("is-alert", tone === "alert");
   els.toast.classList.add("is-visible");
-  toastTimer = window.setTimeout(hideToast, 3000);
+  const generation = sessionGeneration;
+  toastTimer = window.setTimeout(() => {
+    if (generation === sessionGeneration) hideToast();
+  }, 3000);
 }
 
 function hideToast() {

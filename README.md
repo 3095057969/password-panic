@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/og-image.png" alt="密码暴走 PASSWORD PANIC —— 一个越来越离谱的密码合规游戏" width="880" />
+  <img src="assets/images/og-image.png" alt="密码暴走 PASSWORD PANIC —— 一个越来越离谱的密码合规游戏" width="880" />
 </div>
 
 <h1 align="center">密码暴走 · PASSWORD PANIC</h1>
@@ -13,6 +13,8 @@
   <a href="https://3095057969.github.io/password-panic/"><strong>▶ 在线试玩</strong></a>
   &nbsp;·&nbsp;
   <a href="https://github.com/3095057969/password-panic">GitHub 仓库</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/3095057969/password-panic/releases/tag/v2.0.0">V2.0 Release</a>
 </p>
 
 <p align="center">
@@ -34,7 +36,13 @@
 
 > **独立同人作品**：玩法灵感来自 [Neal.fun 的 The Password Game](https://neal.fun/password-game/)。本项目的规则文案、视觉设计、代码和所有互动关卡均为原创实现，与原作无关联。`neal.fun` 名称及相关素材不属于本项目。
 
-![密码暴走游戏画面](assets/preview.webp)
+## 当前版本
+
+当前产品版本为 `2.0.0`，对应 GitHub Release [`V2.0`](https://github.com/3095057969/password-panic/releases/tag/v2.0.0)。本次发布完成存档迁移与严格校验、会话隔离、IME/Unicode 输入修复、保存失败恢复、减少动效、胜利弹窗焦点与分享隐私等稳定性改进。
+
+自动化基线为规则/状态测试 17/17、Edge E2E 17/17。详细证据与未覆盖环境见 [V2.0 测试报告](docs/reviews/password-panic-v2-test-report-2026-10-20.md)。
+
+![密码暴走游戏画面](assets/images/preview.webp)
 
 ## 玩法
 
@@ -48,6 +56,8 @@
 5. 全部 21 条通过后，会获得一张可复制的通关战报。
 
 进度和密码会自动保存在浏览器的 `localStorage` 中，刷新页面可以接着来。没有账号、没有服务器、没有真实的密码上传。
+
+存档键仍保留历史名称 `password-panic-state-v1`，内部数据从 V2 起使用 `schemaVersion: 2`。旧版记录会显式迁移；损坏 JSON 会备份到 `password-panic-state-corrupt-backup`；遇到更高 schema 或未知规则集时不会自动覆盖，只有用户确认“开始新局”后才会写入当前版本。
 
 ## 特点
 
@@ -63,7 +73,7 @@
 
 ## 本地运行
 
-需要 Node.js 18+（只用它启动静态服务器，运行游戏本身不需要 Node）。
+需要 Node.js 20+（本地服务器与浏览器测试工具链使用；部署后的游戏本身不需要 Node）。
 
 ```bash
 npm run dev
@@ -75,33 +85,51 @@ npm run dev
 
 ## 测试
 
-规则引擎和参考答案的单元测试使用 Node 内置测试运行器：
+规则、状态契约和参考答案的单元测试使用 Node 内置测试运行器；浏览器 E2E 使用 `playwright-core` 驱动本机 Microsoft Edge，不下载额外浏览器。
 
 ```bash
+# 规则 + 存档契约
 npm test
-# 或者
-node --test tests/rules.test.mjs
+
+# Edge 浏览器 E2E（固定单并发，避免共享端口冲突）
+npm run test:e2e
+
+# 全部测试
+npm run test:all
 ```
 
-测试覆盖：规则表完整性、Unicode 字符计数、数字和、三连检测、修正案废止、互动规则、黑名单、精确字符数和完整通关解。
+测试覆盖：规则表完整性、Unicode 字符计数、数字和、三连检测、修正案废止、互动规则、黑名单、精确字符数和完整通关解；schema 迁移、严格类型、不变量、损坏/未来存档；以及真实 21 条通关路径、320px 布局、IME、异步隔离、保存失败、剪贴板、减少动效和焦点恢复。
+
+E2E 默认读取 `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`。如果 Edge 安装位置不同，请修改 `tests/e2e.test.mjs` 中的 `EDGE` 常量。
+
+`PRD_V1.0.md`、`PRD_V2.0.md` 分别为前一版和当前 V2.0 需求基线。当前产品版本为 `2.0.0`，对应 Git 标签 `v2.0.0`。本次 Release 的验证边界以测试报告为准：只完成了 Edge 桌面自动化矩阵，不构成 Chrome、Firefox、Safari/WebKit、移动真机、真实 IME、屏幕阅读器或 200% 缩放的全平台验收声明。
 
 ## 项目结构
 
 ```text
 .
 ├── index.html              # 页面与所有文案
-├── styles.css              # 视觉系统、响应式布局、动效
 ├── js/
 │   ├── rules.js            # 21 条规则与纯校验逻辑
+│   ├── state.js            # 存档 schema、迁移、规范化与不变量
 │   └── game.js             # 状态、解锁、互动、存档、结算
 ├── assets/
-│   ├── fonts/              # Archivo Black / Space Mono（OFL）
-│   ├── favicon.svg
-│   ├── og-image.png
-│   └── preview.webp
+│   ├── css/
+│   │   └── styles.css      # 视觉系统、响应式布局、动效
+│   ├── images/
+│   │   ├── favicon.svg
+│   │   ├── og-image.png
+│   │   └── preview.webp
+│   └── fonts/              # Archivo Black / Space Mono（OFL）
 ├── scripts/serve.mjs       # 零依赖本地静态服务器
 ├── tests/rules.test.mjs    # 规则单元测试
+├── tests/state.test.mjs    # 存档契约与迁移测试
+├── tests/e2e.test.mjs      # Edge + Playwright 端到端测试
+├── docs/reviews/           # 代码/PRD 评审与测试报告
+├── docs/THIRD_PARTY_NOTICES.md
 ├── site.webmanifest
+├── package.json
+├── README.md
 └── LICENSE
 ```
 
@@ -127,7 +155,7 @@ GitHub Pages 设置：
 - **Archivo Black** — Copyright 2017 The Archivo Black Project Authors.
 - **Space Mono** — Copyright 2016 The Space Mono Project Authors.
 
-完整许可文本位于 [`assets/fonts/`](assets/fonts/)，更多信息见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+完整许可文本位于 [`assets/fonts/`](assets/fonts/)，更多信息见 [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)。
 
 ---
 

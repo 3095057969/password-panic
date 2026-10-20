@@ -18,7 +18,7 @@
       property="og:description"
       content="每满足一条，规则就多一条。21 条离谱的密码要求，你能活到最后吗？"
     />
-    <meta property="og:image" content="https://3095057969.github.io/password-panic/assets/og-image.png" />
+    <meta property="og:image" content="https://3095057969.github.io/password-panic/assets/images/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
@@ -31,10 +31,10 @@
       name="twitter:description"
       content="每满足一条，规则就多一条。21 条离谱的密码要求，你能活到最后吗？"
     />
-    <meta name="twitter:image" content="https://3095057969.github.io/password-panic/assets/og-image.png" />
-    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+    <meta name="twitter:image" content="https://3095057969.github.io/password-panic/assets/images/og-image.png" />
+    <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg" />
     <link rel="manifest" href="site.webmanifest" />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="assets/css/styles.css" />
   </head>
   <body>
     <a class="skip-link" href="#game">跳到游戏</a>
@@ -156,7 +156,6 @@
                   id="password"
                   class="password-input"
                   rows="4"
-                  maxlength="140"
                   spellcheck="false"
                   autocomplete="off"
                   autocapitalize="off"
@@ -168,9 +167,16 @@
               </div>
 
               <div class="password-meta">
-                <span><b id="char-count">0</b> 字符</span>
+                <span><b id="char-count">0</b> / <span id="char-limit">140</span> 字符</span>
                 <span>数字和 <b id="digit-sum">0</b></span>
                 <span class="meta-live"><i aria-hidden="true"></i> 实时审查</span>
+              </div>
+
+              <div class="storage-row">
+                <p id="storage-status" class="storage-status" role="status" aria-live="polite" hidden></p>
+                <button id="start-fresh-btn" class="btn btn-ghost storage-action" type="button" hidden>
+                  开始新局
+                </button>
               </div>
 
               <div class="progress-wrap">
@@ -200,6 +206,10 @@
                   <span class="btn-glyph" aria-hidden="true">↺</span> 重开
                 </button>
               </div>
+
+              <button id="show-victory-btn" class="btn victory-reopen" type="button" hidden>
+                <span class="btn-glyph" aria-hidden="true">✓</span> 查看结果
+              </button>
 
               <div class="current-objective">
                 <span class="objective-label">当前目标 / NOW</span>
